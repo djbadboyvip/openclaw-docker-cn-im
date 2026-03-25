@@ -1,0 +1,33 @@
+name: Build and Export ARM64 Docker Image (tar)
+
+on:
+  workflow_dispatch:   # 手动触发，避免自动运行占用配额
+
+jobs:
+  build-and-export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export ARM64 image as tar
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          outputs: type=tar,dest=/tmp/openclaw-cn-im-arm64.tar
+          tags: ghcr.io/djbadboyvip/openclaw-cn-im:latest
+          # 如果你的 Dockerfile 需要构建参数，可以添加 build-args
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-cn-im-arm64
+          path: /tmp/openclaw-cn-im-arm64.tar
+          retention-days: 7
