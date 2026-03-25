@@ -1,9 +1,9 @@
-name: Build and Push Docker Image
+name: Build and Push to GHCR
 
 on:
   push:
     branches:
-      - main   # 当 main 分支有推送时触发构建
+      - main          # 当 main 分支有推送时触发
   schedule:
     - cron: '0 2 * * *'   # 每天 UTC 2:00 检查上游更新并构建
   workflow_dispatch:       # 允许手动触发
@@ -11,24 +11,28 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # 允许写入 GitHub Packages
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # 获取完整历史以便比较
+          fetch-depth: 0
 
       - name: Sync with upstream (if needed)
         run: |
           git remote add upstream https://github.com/justlovemaki/OpenClaw-Docker-CN-IM.git
           git fetch upstream
-          # 检查上游 main 分支是否有新提交
+          # 如果上游有更新，则合并
           if [ "$(git rev-parse HEAD)" != "$(git rev-parse upstream/main)" ]; then
             echo "Upstream has new commits. Merging..."
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git merge upstream/main --no-edit
-            # 如果合并有冲突，在此处可以加入自动解决冲突的逻辑（例如保留本地修改）
+            # 如果合并冲突，可以选择保留本地版本（根据实际情况修改）
+            # git checkout --ours <file> && git add <file>
           else
             echo "No upstream updates."
           fi
@@ -36,11 +40,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # 使用自动生成的 token
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -48,8 +53,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/openclaw-cn-im:latest
-            ${{ secrets.DOCKER_USERNAME }}/openclaw-cn-im:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/openclaw-cn-im:latest
+            ghcr.io/${{ github.repository_owner }}/openclaw-cn-im:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
