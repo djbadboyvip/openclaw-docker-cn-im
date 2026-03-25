@@ -1,4 +1,4 @@
-# OpenClaw Docker 镜像
+# OpenClaw Docker 镜像（多架构版）
 FROM node:22-slim
 
 # 设置工作目录
@@ -36,25 +36,23 @@ RUN apt-get update && \
     websockify && \
     sed -i 's/^# *en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     locale-gen && \
-    # update-locale 在部分 slim 基础镜像中会返回 invalid locale settings，这里改为直接写入默认 locale 配置
     printf 'LANG=en_US.UTF-8\nLANGUAGE=en_US:en\nLC_ALL=en_US.UTF-8\n' > /etc/default/locale && \
-    # 配置 git 使用 HTTPS 替代 SSH
     git config --system url."https://github.com/".insteadOf ssh://git@github.com/ && \
-    # 更新 npm 并安装全局包
     npm install -g npm@latest && \
     npm install -g openclaw@2026.3.23-2 opencode-ai@latest playwright playwright-extra puppeteer-extra-plugin-stealth @steipete/bird && \
-    # 安装 bun、uv 和 qmd
+    # 安装 bun（支持多架构）
     curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash && \
+    # 安装 uv（支持多架构）
     curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh && \
     npm install -g @tobilu/qmd@1.1.6 && \
-    # 安装 Playwright 浏览器依赖
+    # 安装 Playwright 浏览器（自动根据架构下载对应 Chromium）
     npx playwright install chromium --with-deps && \
     # 清理 apt 缓存
     apt-get purge -y --auto-remove && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /root/.npm /root/.cache
 
-# 2. 插件安装（作为 node 用户以避免后期权限修复带来的镜像膨胀）
+# 2. 插件安装（作为 node 用户）
 RUN mkdir -p /home/node/.openclaw/workspace /home/node/.openclaw/extensions && \
     chown -R node:node /home/node
 
@@ -62,7 +60,7 @@ USER node
 ENV HOME=/home/node
 WORKDIR /home/node
 
-# 安装linuxbrew（Homebrew 的 Linux 版本），并配置环境变量
+# 安装 linuxbrew（Homebrew 的 Linux 版本），并配置环境变量
 RUN mkdir -p /home/node/.linuxbrew/Homebrew && \
     git clone --depth 1 https://github.com/Homebrew/brew /home/node/.linuxbrew/Homebrew && \
     mkdir -p /home/node/.linuxbrew/bin && \
@@ -80,14 +78,12 @@ RUN cd /home/node/.openclaw/extensions && \
   timeout 300 openclaw plugins install @tencent-connect/openclaw-qqbot@latest || true && \
   timeout 300 openclaw plugins install @sunnoy/wecom || true && \
   mkdir -p /home/node/.openclaw /home/node/.openclaw-seed && \
-  # 预执行安装命令（容器内需手动交互，此处仅作声明或环境准备）
-  #  printf '{\n  "channels": {\n    "feishu": {\n      "enabled": false,\n      "appId": "2222222222222222",\n      "appSecret": "1111111111111111",\n      "accounts": {\n        "default": {\n          "appId": "2222222222222222",\n          "appSecret": "1111111111111111",\n          "botName": "OpenClaw Bot"\n        }\n      }\n    }\n  }\n}\n' > /home/node/.openclaw/openclaw.json && \
-  # npx -y @larksuite/openclaw-lark-tools install && \
+  # 预执行安装命令（容器内需手动交互，此处仅作环境准备）
   find /home/node/.openclaw/extensions -name ".git" -type d -exec rm -rf {} + && \
   mv /home/node/.openclaw/extensions /home/node/.openclaw-seed/ && \
   printf '%s\n' '2026.3.23-2' > /home/node/.openclaw-seed/extensions/.seed-version && \
   rm -rf /tmp/* /home/node/.npm /home/node/.cache
-  
+
 # 3. 最终配置
 USER root
 
