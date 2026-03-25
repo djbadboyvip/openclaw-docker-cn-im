@@ -70,10 +70,9 @@ jobs:
           platforms: linux/amd64, linux/arm64   # 支持 x86_64 和 ARM64 架构
           push: true
           tags: |
-            # GitHub Container Registry 标签
+           
             ghcr.io/${{ github.repository_owner }}/openclaw-cn-dh:latest
             ghcr.io/${{ github.repository_owner }}/openclaw-cn-dh:${{ github.sha }}
-            # Docker Hub 标签（假设你的 Docker Hub 用户名在 secrets.DOCKER_USERNAME 中）
             ${{ secrets.DOCKER_USERNAME }}/openclaw-cn-dh:latest
             ${{ secrets.DOCKER_USERNAME }}/openclaw-cn-dh:${{ github.sha }}
           labels: |
