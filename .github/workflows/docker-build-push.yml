@@ -1,41 +1,49 @@
-name: Build and Push to GHCR
+name: Build and Push Multi-Arch Image to GHCR
 
 on:
   push:
     branches:
-      - main          # 当 main 分支有推送时触发
+      - main               # 推送到 main 分支时触发
   schedule:
-    - cron: '0 2 * * *'   # 每天 UTC 2:00 检查上游更新并构建
-  workflow_dispatch:       # 允许手动触发
+    - cron: '0 2 * * *'    # 每天 UTC 2:00 运行
+  workflow_dispatch:       # 支持手动触发
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write   # 允许写入 GitHub Packages
+      contents: read        # 读取仓库内容
+      packages: write       # 写入 GitHub Packages
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0    # 获取完整历史，便于合并
 
-      - name: Sync with upstream (if needed)
+      - name: Sync with upstream
         run: |
           git remote add upstream https://github.com/justlovemaki/OpenClaw-Docker-CN-IM.git
           git fetch upstream
-          # 如果上游有更新，则合并
+          # 如果上游有更新，则尝试合并
           if [ "$(git rev-parse HEAD)" != "$(git rev-parse upstream/main)" ]; then
             echo "Upstream has new commits. Merging..."
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git merge upstream/main --no-edit
-            # 如果合并冲突，可以选择保留本地版本（根据实际情况修改）
-            # git checkout --ours <file> && git add <file>
+            # 尝试自动合并；若冲突，使用本地版本覆盖
+            if ! git merge upstream/main --no-edit; then
+              echo "Merge conflict detected. Using local version for conflicting files."
+              # 列出所有冲突文件，并用本地版本覆盖
+              git diff --name-only --diff-filter=U | xargs git checkout --ours
+              git add .
+              git commit -m "Auto-resolved conflicts by keeping local changes"
+            fi
           else
             echo "No upstream updates."
           fi
+
+      - name: Set up QEMU for multi-arch builds
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -45,12 +53,13 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}   # 使用自动生成的 token
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push multi-arch image
         uses: docker/build-push-action@v5
         with:
           context: .
+          platforms: linux/amd64, linux/arm64   # 支持 x86_64 和 ARM64 架构
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/openclaw-cn-im:latest
